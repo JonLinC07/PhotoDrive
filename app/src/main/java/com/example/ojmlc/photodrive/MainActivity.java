@@ -4,7 +4,9 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
+import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Environment;
 import android.provider.MediaStore;
@@ -38,27 +40,20 @@ public class MainActivity extends AppCompatActivity {
 
     Button opnCamera, sndPhoto;
     ImageView photo;
-    String currentPhotoPath;
+    private String currentPhotoPath, nameImage;
     private StorageReference storageRef;
-    //int MY_PERMISSIONS_REQUEST_READ_CONTACTS = 1;
-    //int MY_PERMISSIONS_REQUEST_CAMERA = 1;
-    //Uri file = Uri.fromFile(new File("/")); //path/to/images/rivers.jpg
-    //StorageReference imageRef = storageRef.child("images");
+    private static final String PRINCIPAL_FOLDER = "UniDrive";
+    private static final String IMAGES_FOLDER = "Imagenes";
+    private static final String IMAGES_DIRECTORY = PRINCIPAL_FOLDER + IMAGES_FOLDER;
+    private static final int CAMERA_REQUEST = 25;
+    File imageFile;
+    Bitmap bmPhoto;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         setTitle("Uni Drive");
-        /*
-        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.CAMERA}, MY_PERMISSIONS_REQUEST_CAMERA);
-        }
-
-                if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, MY_PERMISSIONS_REQUEST_READ_CONTACTS);
-        }
-        */
 
         storageRef = FirebaseStorage.getInstance().getReference();
         opnCamera = findViewById(R.id.btnCamera);
@@ -68,95 +63,66 @@ public class MainActivity extends AppCompatActivity {
         opnCamera.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                File nFile = new File(Environment.getExternalStorageDirectory(), IMAGES_DIRECTORY);
+                boolean created = nFile.exists();
 
+                if (created == false) {
+                    created = nFile.mkdirs();
+                } else if (created == true) {
+                    //Long timeStamp = System.currentTimeMillis()/1000;
+                    String nameImage = new SimpleDateFormat("ddMMyyyy_HHmmSS").format(new Date()) + ".jpg";
+                    currentPhotoPath = Environment.getExternalStorageDirectory() + File.separator + IMAGES_DIRECTORY
+                            + File.separator + nameImage;
+                    imageFile = new File(currentPhotoPath);
 
-                Intent photoIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-                startActivityForResult(photoIntent, 0);
-
-
+                    Intent photoIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                    Uri fileUri = FileProvider.getUriForFile(MainActivity.this, BuildConfig.APPLICATION_ID, imageFile);
+                    photoIntent.putExtra(MediaStore.EXTRA_OUTPUT, fileUri);
+                    startActivityForResult(photoIntent, CAMERA_REQUEST);
+                }
             }
         });
 
         sndPhoto.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                Uri file = Uri.fromFile(new File(currentPhotoPath));
+                //CREAR METODO PARA SUBIR IMAGENES CON DIFERENTE NOMBRE
+                StorageReference imageRef = storageRef.child("images/nameImage");
 
-                photo.buildDrawingCache();
-                Bitmap bm = photo.getDrawingCache();
-                OutputStream fos = null;
-                Uri uri;
-
-                try {
-                    currentPhotoPath = Environment.getExternalStorageDirectory() + "/" + "UniDrive/";
-                    File photoDir = new File(currentPhotoPath);
-
-                    if (!photoDir.exists()) {
-                        photoDir.mkdir();
-                    }
-
-                    uri = Uri.fromFile(photoDir);
-                    fos = new FileOutputStream(photoDir);
-                } catch (Exception e) {
-                    Log.e("ERROR!", e.getMessage());
-                }
-
-                try {
-                    bm.compress(Bitmap.CompressFormat.JPEG, 100, fos);
-                    fos.flush();
-                    fos.close();
-                } catch (Exception e) {
-                    Log.e("ERROR!", e.getMessage());
-                }
-
-                String fullName = currentPhotoPath + "myLog";
-                File file = new File(fullName);
-
-
-                /*photo.setDrawingCacheEnabled(true);
-                photo.buildDrawingCache();
-                Bitmap bm = ((BitmapDrawable)photo.getDrawable()).getBitmap();
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                bm.compress(Bitmap.CompressFormat.JPEG, 100, baos);
-                byte[] data = baos.toByteArray();
-                UploadTask uploadTask = storageRef.putBytes(data);
-
-                uploadTask.addOnFailureListener(new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) {
-                        Toast.makeText(MainActivity.this, "Foto subida correctamente", Toast.LENGTH_SHORT).show();
-                    }
-                }).addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
-                    @Override
-                    public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
-                        taskSnapshot.getMetadata();
-                        Toast.makeText(MainActivity.this, "Foto subida correctamente", Toast.LENGTH_SHORT).show();
-                    }
-                });*/
+                imageRef.putFile(file)
+                        .addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
+                            @Override
+                            public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
+                                // Get a URL to the uploaded content
+                                //Uri downloadUrl = taskSnapshot.getDownloadUrl();
+                                Toast.makeText(MainActivity.this, "Foto enviada correctamente", Toast.LENGTH_SHORT).show();
+                            }
+                        }).addOnFailureListener(new OnFailureListener() {
+                            @Override
+                            public void onFailure(@NonNull Exception exception) {
+                                // Handle unsuccessful uploads
+                                // ...
+                                Toast.makeText(MainActivity.this, "Error al subir la foto", Toast.LENGTH_SHORT).show();
+                            }
+                        });
             }
         });
-
-        /*imageRef.putFile(file)
-                .addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
-                    @Override
-                    public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
-                        // Get a URL to the uploaded content
-                        Uri downloadUrl = taskSnapshot.getDownloadUrl();
-                    }
-                })
-                .addOnFailureListener(new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception exception) {
-                        // Handle unsuccessful uploads
-                        // ...
-                    }
-                });*/
     }
 
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        Bitmap bmPhoto = (Bitmap)data.getExtras().get("data");
-        photo.setImageBitmap(bmPhoto);
 
+        MediaScannerConnection.scanFile(this, new String[]{currentPhotoPath}, null,
+                new MediaScannerConnection.OnScanCompletedListener() {
+                    @Override
+                    public void onScanCompleted(String path, Uri uri) {
+                        Log.i("Path", "" + currentPhotoPath);
+                    }
+                });
+
+        bmPhoto = BitmapFactory.decodeFile(currentPhotoPath);
+        photo.setImageBitmap(bmPhoto);
     }
 
     private String createImageFile() throws IOException {
