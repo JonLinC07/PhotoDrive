@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "108562226951",
+    "firebase_url": "https://unidrive-027.firebaseio.com",
+    "project_id": "unidrive-027",
+    "storage_bucket": "unidrive-027.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:108562226951:android:4a4d409d4babe6cc",
+        "android_client_info": {
+          "package_name": "com.example.ojmlc.photodrive"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "108562226951-p2vf3qto4rgun6oq9vmlfvle6ngp97p8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.ojmlc.photodrive",
+            "certificate_hash": "743e813a62ee9c4473206c80e5f0230314b9c995"
+          }
+        },
+        {
+          "client_id": "108562226951-t7etblntpshkhcltj1bhekiah7q58aj4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBPPtREYh7yPQLx9zwXKiNI9NXVZ7E7IdE"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "appinvite_service": {
+          "status": 2,
+          "other_platform_oauth_client": [
+            {
+              "client_id": "108562226951-t7etblntpshkhcltj1bhekiah7q58aj4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
