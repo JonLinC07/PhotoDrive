@@ -6,6 +6,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Environment;
@@ -14,6 +15,7 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.content.FileProvider;
+import android.support.v4.content.res.ResourcesCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -38,16 +40,18 @@ import java.util.Date;
 
 public class MainActivity extends AppCompatActivity {
 
-    Button opnCamera, sndPhoto;
+    File imageFile;
+    Bitmap bmPhoto;
     ImageView photo;
-    private String currentPhotoPath, nameImage;
+    Button opnCamera, sndPhoto;
     private StorageReference storageRef;
+    private static String currentPhotoPath, nameImage;
+    private static boolean sendOrNot;
     private static final String PRINCIPAL_FOLDER = "UniDrive";
     private static final String IMAGES_FOLDER = "Imagenes";
     private static final String IMAGES_DIRECTORY = PRINCIPAL_FOLDER + IMAGES_FOLDER;
     private static final int CAMERA_REQUEST = 25;
-    File imageFile;
-    Bitmap bmPhoto;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +59,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         setTitle("Uni Drive");
 
+        sendOrNot = false;
         storageRef = FirebaseStorage.getInstance().getReference();
         opnCamera = findViewById(R.id.btnCamera);
         sndPhoto = findViewById(R.id.btnEnviar);
@@ -70,7 +75,7 @@ public class MainActivity extends AppCompatActivity {
                     created = nFile.mkdirs();
                 } else if (created == true) {
                     //Long timeStamp = System.currentTimeMillis()/1000;
-                    String nameImage = new SimpleDateFormat("ddMMyyyy_HHmmSS").format(new Date()) + ".jpg";
+                    nameImage = new SimpleDateFormat("ddMMyyyy_HHmmSS").format(new Date()) + ".jpg";
                     currentPhotoPath = Environment.getExternalStorageDirectory() + File.separator + IMAGES_DIRECTORY
                             + File.separator + nameImage;
                     imageFile = new File(currentPhotoPath);
@@ -79,6 +84,8 @@ public class MainActivity extends AppCompatActivity {
                     Uri fileUri = FileProvider.getUriForFile(MainActivity.this, BuildConfig.APPLICATION_ID, imageFile);
                     photoIntent.putExtra(MediaStore.EXTRA_OUTPUT, fileUri);
                     startActivityForResult(photoIntent, CAMERA_REQUEST);
+                    photo.setRotation(90);
+                    sendOrNot = true;
                 }
             }
         });
@@ -86,26 +93,35 @@ public class MainActivity extends AppCompatActivity {
         sndPhoto.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Uri file = Uri.fromFile(new File(currentPhotoPath));
-                //CREAR METODO PARA SUBIR IMAGENES CON DIFERENTE NOMBRE
-                StorageReference imageRef = storageRef.child("images/nameImage");
+                Drawable emptyImage = photo.getDrawable();
 
-                imageRef.putFile(file)
-                        .addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
-                            @Override
-                            public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
-                                // Get a URL to the uploaded content
-                                //Uri downloadUrl = taskSnapshot.getDownloadUrl();
-                                Toast.makeText(MainActivity.this, "Foto enviada correctamente", Toast.LENGTH_SHORT).show();
-                            }
-                        }).addOnFailureListener(new OnFailureListener() {
-                            @Override
-                            public void onFailure(@NonNull Exception exception) {
-                                // Handle unsuccessful uploads
-                                // ...
-                                Toast.makeText(MainActivity.this, "Error al subir la foto", Toast.LENGTH_SHORT).show();
-                            }
-                        });
+                if (sendOrNot) {
+
+                    Uri file = Uri.fromFile(new File(currentPhotoPath));
+                    //CREAR METODO PARA SUBIR IMAGENES CON DIFERENTE NOMBRE //ID Drawable common_google_signin_btn_icon_light_normal_background
+                    StorageReference imageRef = storageRef.child("UniParking/Photo" + "_" + nameImage);
+
+                    imageRef.putFile(file)
+                            .addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
+                                @Override
+                                public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
+                                    // Get a URL to the uploaded content
+                                    //Uri downloadUrl = taskSnapshot.getDownloadUrl();
+                                    Toast.makeText(MainActivity.this, "Foto enviada correctamente", Toast.LENGTH_SHORT).show();
+                                }
+                            }).addOnFailureListener(new OnFailureListener() {
+                        @Override
+                        public void onFailure(@NonNull Exception exception) {
+                            // Handle unsuccessful uploads
+                            // ...
+                            Toast.makeText(MainActivity.this, "Error al subir la foto", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                    sendOrNot = false;
+
+                } else {
+                    Toast.makeText(MainActivity.this, "No se ah tomado una foto aun", Toast.LENGTH_SHORT).show();
+                }
             }
         });
     }
