@@ -1,16 +1,25 @@
 package com.example.ojmlc.photodrive;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.location.Address;
+import android.location.Criteria;
+import android.location.Geocoder;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.location.LocationProvider;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -21,11 +30,16 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.gms.tasks.Continuation;
+import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
@@ -37,21 +51,27 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
 
     File imageFile;
     Bitmap bmPhoto;
     ImageView photo;
+    EditText userDescription;
     Button opnCamera, sndPhoto;
+    private LocationManager gpsManager;
     private StorageReference storageRef;
-    private static String currentPhotoPath, nameImage;
-    private static boolean sendOrNot;
+    private double latitud;
+    private double longitud;
+    private static String currentPhotoPath, nameImage, downloadUrl;
+    private static boolean sendOrNot, gpsOrNot;
     private static final String PRINCIPAL_FOLDER = "UniDrive";
     private static final String IMAGES_FOLDER = "Imagenes";
     private static final String IMAGES_DIRECTORY = PRINCIPAL_FOLDER + IMAGES_FOLDER;
+    private static final int GPS_LOCATION = 62;
     private static final int CAMERA_REQUEST = 25;
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,10 +84,18 @@ public class MainActivity extends AppCompatActivity {
         opnCamera = findViewById(R.id.btnCamera);
         sndPhoto = findViewById(R.id.btnEnviar);
         photo = findViewById(R.id.IMPhoto);
+        userDescription = findViewById(R.id.txtDescrption);
 
         opnCamera.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                        && ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION,}, GPS_LOCATION);
+                } else {
+                    locationStart();
+                }
+
                 File nFile = new File(Environment.getExternalStorageDirectory(), IMAGES_DIRECTORY);
                 boolean created = nFile.exists();
 
@@ -93,13 +121,10 @@ public class MainActivity extends AppCompatActivity {
         sndPhoto.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Drawable emptyImage = photo.getDrawable();
-
                 if (sendOrNot) {
-
                     Uri file = Uri.fromFile(new File(currentPhotoPath));
-                    //CREAR METODO PARA SUBIR IMAGENES CON DIFERENTE NOMBRE //ID Drawable common_google_signin_btn_icon_light_normal_background
-                    StorageReference imageRef = storageRef.child("UniParking/Photo" + "_" + nameImage);
+                    final StorageReference imageRef = storageRef.child("UniParking/Photo_" + nameImage);
+                    //UploadTask uploadTask = imageRef.putFile(file);
 
                     imageRef.putFile(file)
                             .addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
@@ -108,6 +133,16 @@ public class MainActivity extends AppCompatActivity {
                                     // Get a URL to the uploaded content
                                     //Uri downloadUrl = taskSnapshot.getDownloadUrl();
                                     Toast.makeText(MainActivity.this, "Foto enviada correctamente", Toast.LENGTH_SHORT).show();
+                                    Task<Uri> downloadTask = taskSnapshot.getMetadata().getReference().getDownloadUrl();
+
+
+                                    downloadTask.addOnSuccessListener(new OnSuccessListener<Uri>() {
+                                        @Override
+                                        public void onSuccess(Uri uri) {
+                                            downloadUrl = imageRef.getDownloadUrl().toString();
+                                            userDescription.setText(downloadUrl);
+                                        }
+                                    });
                                 }
                             }).addOnFailureListener(new OnFailureListener() {
                         @Override
@@ -122,6 +157,8 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     Toast.makeText(MainActivity.this, "No se ah tomado una foto aun", Toast.LENGTH_SHORT).show();
                 }
+
+
             }
         });
     }
@@ -141,13 +178,97 @@ public class MainActivity extends AppCompatActivity {
         photo.setImageBitmap(bmPhoto);
     }
 
-    private String createImageFile() throws IOException {
-        String timeStamp = new SimpleDateFormat("ddMMyyyy_HHmmSS").format(new Date());
-        String imageName = "JPEG_" + timeStamp + "_";
-        File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-        File image = File.createTempFile(imageName, ".jpg", storageDir);
+    private void locationStart() {
+        gpsManager = (LocationManager)getSystemService(Context.LOCATION_SERVICE);
+        Localizator localizer = new Localizator();
+        localizer.setMainActivity(this);
+        gpsOrNot = gpsManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
 
-        currentPhotoPath = image.getAbsolutePath();
-        return currentPhotoPath;
+        if (!gpsOrNot) {
+            Intent settingIntent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+            startActivity(settingIntent);
+        }
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION,}, GPS_LOCATION);
+            return;
+        }
+
+        gpsManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, localizer);
+        gpsManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, localizer);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == GPS_LOCATION) {
+            locationStart();
+            return;
+        }
+    }
+
+    /*
+    public void setLocation(Location location) {
+        if (location.getLongitude() != 0.0 && location.getLatitude() != 0.0) {
+            try {
+                Geocoder geocoder = new Geocoder(this, Locale.getDefault());
+                List<Address> list = geocoder.getFromLocation(location.getLatitude(), location.getLongitude(), 1);
+
+                if (!list.isEmpty()) {
+                    Address address = list.get(0);
+                    ubication = "Direccion: " + address.getAddressLine(0);
+                }
+            } catch (IOException ioe) {
+                ioe.printStackTrace();
+            }
+
+        }
+    }
+    */
+
+    public class Localizator implements LocationListener {
+        MainActivity ma;
+
+        public MainActivity getMainActivity() {
+            return ma;
+        }
+
+        public void setMainActivity(MainActivity main) {
+            this.ma = main;
+        }
+
+        @Override
+        public void onLocationChanged(Location location) {
+            latitud = location.getLatitude();
+            longitud = location.getLongitude();
+            //viewLongitud.setText(String.valueOf(longitud));
+            //this.ma.setLocation(location);
+        }
+
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+            switch (status) {
+                case LocationProvider.AVAILABLE:
+                    Log.d("debug", "LocationProvider.AVAILABLE");
+                    break;
+                case LocationProvider.OUT_OF_SERVICE:
+                    Log.d("debug", "LocationProvider.OUT_OF_SERVICE");
+                    break;
+                case LocationProvider.TEMPORARILY_UNAVAILABLE:
+                    Log.d("debug", "LocationProvider.TEMPORARILY_UNAVAILABLE");
+                    break;
+            }
+        }
+
+        @Override
+        public void onProviderEnabled(String provider) {
+            Toast.makeText(ma, "GPS activado", Toast.LENGTH_SHORT).show();
+        }
+
+        @Override
+        public void onProviderDisabled(String provider) {
+            Toast.makeText(ma, "Favor de activar el GPS", Toast.LENGTH_SHORT).show();
+        }
     }
 }
