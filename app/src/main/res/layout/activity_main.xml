@@ -54,22 +54,6 @@
         app:layout_constraintVertical_bias="0.063"
         app:srcCompat="@mipmap/badparking" />
 
-    <TextView
-        android:id="@+id/txtLon"
-        android:layout_width="wrap_content"
-        android:layout_height="26dp"
-        android:layout_marginStart="8dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="8dp"
-        android:layout_marginBottom="8dp"
-        android:text="Agrega una descripción"
-        android:textSize="18sp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.458" />
-
     <EditText
         android:id="@+id/txtDescrption"
         android:layout_width="245dp"
@@ -80,6 +64,7 @@
         android:layout_marginBottom="8dp"
         android:ems="10"
         android:inputType="textMultiLine"
+        android:hint="Agerega una descripcion"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.504"
