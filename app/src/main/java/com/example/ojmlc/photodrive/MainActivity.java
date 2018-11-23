@@ -1,6 +1,7 @@
 package com.example.ojmlc.photodrive;
 
 import android.Manifest;
+import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -44,6 +45,8 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.IgnoreExtraProperties;
 import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.OnProgressListener;
+import com.google.firebase.storage.StorageMetadata;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
 
@@ -56,6 +59,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -64,22 +68,18 @@ public class MainActivity extends AppCompatActivity {
     ImageView photo;
     EditText userDescription;
     Button opnCamera, sndPhoto;
+    ProgressDialog progressDialog;
     private LocationManager gpsManager;
     private StorageReference storageRef;
+    private FirebaseStorage storageInstance;
     private FirebaseDatabase dataBaseInstace;
     private DatabaseReference dataBaseRef;
     private double latitude;
     private double longitude;
-    private static String currentPhotoPath, nameImage, downloadUrl;
+    private static String currentPhotoPath, nameImage;
     private static boolean sendOrNot, gpsOrNot;
     private static final String PRINCIPAL_FOLDER = "UniDrive";
     private static final String IMAGES_FOLDER = "Imagenes";
-
-    private static final String PHOTO_NAME = "/Name";
-    private static final String PHOTO_DESCRIPTION = "/Description";
-    private static final String PHOTO_DOWNLOAD_URL = "/DownloadUrl";
-    private static final String PHOTO_LATITUDE = "/Latitud";
-    private static final String PHOTO_LONGITUDE = "/Longitude";
     private static final String IMAGES_DIRECTORY = PRINCIPAL_FOLDER + IMAGES_FOLDER;
     private static final int GPS_LOCATION = 62;
     private static final int CAMERA_REQUEST = 25;
@@ -91,6 +91,7 @@ public class MainActivity extends AppCompatActivity {
         setTitle("Uni Drive");
 
         sendOrNot = false;
+        storageInstance = FirebaseStorage.getInstance();
         storageRef = FirebaseStorage.getInstance().getReference();
         dataBaseInstace = FirebaseDatabase.getInstance();
         dataBaseRef = dataBaseInstace.getReference("Photos");
@@ -98,6 +99,7 @@ public class MainActivity extends AppCompatActivity {
         sndPhoto = findViewById(R.id.btnEnviar);
         photo = findViewById(R.id.IMPhoto);
         userDescription = findViewById(R.id.txtDescrption);
+
 
         opnCamera.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -126,6 +128,7 @@ public class MainActivity extends AppCompatActivity {
                     photoIntent.putExtra(MediaStore.EXTRA_OUTPUT, fileUri);
                     startActivityForResult(photoIntent, CAMERA_REQUEST);
                     photo.setRotation(90);
+                    userDescription.setText("");
                     sendOrNot = true;
                 }
             }
@@ -136,30 +139,48 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View v) {
                 if (sendOrNot && !userDescription.getText().toString().isEmpty()) {
 
-                        Uri file = Uri.fromFile(new File(currentPhotoPath));
-                        final StorageReference imageRef = storageRef.child("UniParking/Photo_" + nameImage);
-                        final String PHOTOS = "Photos/Photo_" + nameImage;
+                        final Uri file = Uri.fromFile(new File(currentPhotoPath));
+                        final String PHOTOS = "Photo_" + nameImage;
+                        final StorageReference imageRef = storageRef.child("UniParking/" + PHOTOS);
+                        final StorageReference downloadRef = storageInstance.getReferenceFromUrl("gs://unidrive-027.appspot.com/UniParking/" + PHOTOS);
+                        final UploadTask uploadTask = imageRef.putFile(file);
 
-                        imageRef.putFile(file)
-                                .addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
-                                    @Override
-                                    public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
-                                        // Get a URL to the uploaded content
-                                        //Uri downloadUrl = taskSnapshot.getDownloadUrl();
-                                        downloadUrl = taskSnapshot.getMetadata().getReference().getDownloadUrl().toString();
-                                        Toast.makeText(MainActivity.this, "Foto enviada correctamente", Toast.LENGTH_SHORT).show();
-                                        dataBaseRef.push().setValue(new Photo(PHOTOS, userDescription.getText().toString(), downloadUrl, latitude, longitude));
-                                        sendOrNot = false;
+                        progressDialog = new ProgressDialog(MainActivity.this);
+                        progressDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+                        progressDialog.setTitle("Enviando foto...");
+                        progressDialog.setProgress(0);
+                        //progressDialog.show();
 
-                                    }
-                                }).addOnFailureListener(new OnFailureListener() {
-                            @Override
-                            public void onFailure(@NonNull Exception exception) {
-                                // Handle unsuccessful uploads
-                                // ...
-                                Toast.makeText(MainActivity.this, "Error al subir la foto", Toast.LENGTH_SHORT).show();
+                    uploadTask.addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
+                        @Override
+                        public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
+                            imageRef.getDownloadUrl().addOnSuccessListener(new OnSuccessListener<Uri>() {
+                                @Override
+                                public void onSuccess(Uri uri) {
+                                    Toast.makeText(MainActivity.this, "Foto enviada correctamente", Toast.LENGTH_SHORT).show();
+                                    dataBaseRef.push().setValue(new Photo(PHOTOS, userDescription.getText().toString(), uri.toString(), latitude, longitude));
+                                    sendOrNot = false;
+                                }
+                            }).addOnFailureListener(new OnFailureListener() {
+                                @Override
+                                public void onFailure(@NonNull Exception exception) {
+                                    Toast.makeText(MainActivity.this, "Error al subir la foto", Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                        }
+                    }).addOnProgressListener(new OnProgressListener<UploadTask.TaskSnapshot>() {
+                        @Override
+                        public void onProgress(UploadTask.TaskSnapshot taskSnapshot) {
+                            int currentProgress = (int) (100*taskSnapshot.getBytesTransferred() / taskSnapshot.getTotalByteCount());
+
+                            if (currentProgress != 100) {
+                                progressDialog.show();
+                                progressDialog.setProgress(currentProgress);
+                            } else {
+                                progressDialog.hide();
                             }
-                        });
+                        }
+                    });
                 } else {
                     Toast.makeText(MainActivity.this, "No se ah tomado una foto nueva o no se ah agregado descripción", Toast.LENGTH_SHORT).show();
                 }
@@ -212,31 +233,8 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /*
-    public void setLocation(Location location) {
-        if (location.getLongitude() != 0.0 && location.getLatitude() != 0.0) {
-            try {
-                Geocoder geocoder = new Geocoder(this, Locale.getDefault());
-                List<Address> list = geocoder.getFromLocation(location.getLatitude(), location.getLongitude(), 1);
-
-                if (!list.isEmpty()) {
-                    Address address = list.get(0);
-                    ubication = "Direccion: " + address.getAddressLine(0);
-                }
-            } catch (IOException ioe) {
-                ioe.printStackTrace();
-            }
-
-        }
-    }
-    */
-
     public class Localizator implements LocationListener {
         MainActivity ma;
-
-        public MainActivity getMainActivity() {
-            return ma;
-        }
 
         public void setMainActivity(MainActivity main) {
             this.ma = main;
@@ -246,8 +244,6 @@ public class MainActivity extends AppCompatActivity {
         public void onLocationChanged(Location location) {
             latitude = location.getLatitude();
             longitude = location.getLongitude();
-            //viewLongitud.setText(String.valueOf(longitud));
-            //this.ma.setLocation(location);
         }
 
         @Override
@@ -280,10 +276,6 @@ public class MainActivity extends AppCompatActivity {
     public static class Photo {
         public String name, description, downloadUrl;
         public double latitude, longitude;
-
-        public Photo() {
-            //Contructor por defecto
-        }
 
         public Photo(String name, String description, String downloadUrl, double latitude, double longitude) {
             this.name = name;
