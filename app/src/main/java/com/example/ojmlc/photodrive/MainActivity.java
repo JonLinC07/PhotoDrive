@@ -22,6 +22,7 @@ import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.content.FileProvider;
@@ -41,6 +42,7 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
+import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.IgnoreExtraProperties;
@@ -76,7 +78,7 @@ public class MainActivity extends AppCompatActivity {
     private DatabaseReference dataBaseRef;
     private double latitude;
     private double longitude;
-    private static String currentPhotoPath, nameImage;
+    private static String currentPhotoPath, nameImage, key;
     private static boolean sendOrNot, gpsOrNot;
     private static final String PRINCIPAL_FOLDER = "UniDrive";
     private static final String IMAGES_FOLDER = "Imagenes";
@@ -142,14 +144,12 @@ public class MainActivity extends AppCompatActivity {
                         final Uri file = Uri.fromFile(new File(currentPhotoPath));
                         final String PHOTOS = "Photo_" + nameImage;
                         final StorageReference imageRef = storageRef.child("UniParking/" + PHOTOS);
-                        final StorageReference downloadRef = storageInstance.getReferenceFromUrl("gs://unidrive-027.appspot.com/UniParking/" + PHOTOS);
                         final UploadTask uploadTask = imageRef.putFile(file);
 
                         progressDialog = new ProgressDialog(MainActivity.this);
                         progressDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
                         progressDialog.setTitle("Enviando foto...");
                         progressDialog.setProgress(0);
-                        //progressDialog.show();
 
                     uploadTask.addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
                         @Override
@@ -158,7 +158,14 @@ public class MainActivity extends AppCompatActivity {
                                 @Override
                                 public void onSuccess(Uri uri) {
                                     Toast.makeText(MainActivity.this, "Foto enviada correctamente", Toast.LENGTH_SHORT).show();
-                                    dataBaseRef.push().setValue(new Photo(PHOTOS, userDescription.getText().toString(), uri.toString(), latitude, longitude));
+                                    dataBaseRef.push().setValue(new Photo(PHOTOS, userDescription.getText().toString(), uri.toString(), key, latitude, longitude),
+                                        new DatabaseReference.CompletionListener() {
+                                        @Override
+                                        public void onComplete(@Nullable DatabaseError databaseError, @NonNull DatabaseReference databaseReference) {
+                                            key = databaseReference.getKey();
+                                            databaseReference.child("ID").setValue(key);
+                                        }
+                                    });
                                     sendOrNot = false;
                                 }
                             }).addOnFailureListener(new OnFailureListener() {
@@ -274,15 +281,16 @@ public class MainActivity extends AppCompatActivity {
 
     @IgnoreExtraProperties
     public static class Photo {
-        public String name, description, downloadUrl;
+        public String name, description, downloadUrl, key;
         public double latitude, longitude;
 
-        public Photo(String name, String description, String downloadUrl, double latitude, double longitude) {
-            this.name = name;
-            this.description = description;
-            this.downloadUrl = downloadUrl;
-            this.latitude = latitude;
-            this.longitude = longitude;
+        public Photo(String Name, String Description, String DownloadUrl, String ID, double Latitude, double Longitude) {
+            this.name = Name;
+            this.description = Description;
+            this.downloadUrl = DownloadUrl;
+            this.key = ID;
+            this.latitude = Latitude;
+            this.longitude = Longitude;
         }
     }
 }
